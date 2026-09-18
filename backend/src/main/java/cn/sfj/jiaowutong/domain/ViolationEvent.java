@@ -2,7 +2,7 @@ package cn.sfj.jiaowutong.domain;
 
 import jakarta.persistence.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 违规/越界事件，作战台红点来源。
@@ -32,7 +32,7 @@ public class ViolationEvent {
     private String detail;
 
     @Column(nullable = false)
-    private LocalDateTime eventTime;
+    private Instant eventTime;
 
     /** 红点是否已读/处置 */
     @Column(name = "read_flag", nullable = false)
@@ -41,7 +41,7 @@ public class ViolationEvent {
     public ViolationEvent() {
     }
 
-    public ViolationEvent(CorrectionObject offender, String type, String detail, LocalDateTime eventTime) {
+    public ViolationEvent(CorrectionObject offender, String type, String detail, Instant eventTime) {
         this.offender = offender;
         this.officeId = offender.getOffice().getId();
         this.type = type;
@@ -54,7 +54,7 @@ public class ViolationEvent {
     public Long getOfficeId() { return officeId; }
     public String getType() { return type; }
     public String getDetail() { return detail; }
-    public LocalDateTime getEventTime() { return eventTime; }
+    public Instant getEventTime() { return eventTime; }
     public Boolean getReadFlag() { return readFlag; }
     public void setReadFlag(Boolean readFlag) { this.readFlag = readFlag; }
 }

@@ -2,8 +2,8 @@ package cn.sfj.jiaowutong.domain;
 
 import jakarta.persistence.*;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 /**
  * 社区矫正对象档案。
@@ -56,25 +56,37 @@ public class CorrectionObject {
     @Column(length = 20)
     private String phone;
 
-    /** 规定报到日：MONDAY..SUNDAY */
+    /** 规定报到日：MONDAY..SUNDAY（按对象所在司法所时区判定） */
     @Column(length = 16)
     private String reportDay;
 
-    /** 最近一次有效定位时间（由轨迹上报更新） */
-    private LocalDateTime lastLocationAt;
+    /** 最近一次有效定位时间（UTC，由轨迹上报更新） */
+    @Column(name = "last_location_at")
+    private Instant lastLocationAt;
 
     private Double lastLat;
     private Double lastLng;
 
-    /** 最近一次定位是否在围栏内 */
+    /** 最近一次定位是否在活动范围内 */
+    @Column(name = "last_inside_fence")
     private Boolean lastInsideFence;
 
-    private LocalDateTime createdAt;
+    /** 最近一次定位是否处于排程禁区 */
+    @Column(name = "last_forbidden")
+    private Boolean lastForbidden;
+
+    /** 最近一次设备状态：电量 0-100 / 信号 0-4 / 是否佩戴 */
+    private Integer lastBattery;
+    private Integer lastSignal;
+    private Boolean lastWorn;
+
+    @Column(nullable = false)
+    private Instant createdAt;
 
     @PrePersist
     public void prePersist() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = Instant.now();
         }
     }
 
@@ -90,11 +102,15 @@ public class CorrectionObject {
     public LocalDate getEndDate() { return endDate; }
     public String getPhone() { return phone; }
     public String getReportDay() { return reportDay; }
-    public LocalDateTime getLastLocationAt() { return lastLocationAt; }
+    public Instant getLastLocationAt() { return lastLocationAt; }
     public Double getLastLat() { return lastLat; }
     public Double getLastLng() { return lastLng; }
     public Boolean getLastInsideFence() { return lastInsideFence; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
+    public Boolean getLastForbidden() { return lastForbidden; }
+    public Integer getLastBattery() { return lastBattery; }
+    public Integer getLastSignal() { return lastSignal; }
+    public Boolean getLastWorn() { return lastWorn; }
+    public Instant getCreatedAt() { return createdAt; }
 
     public void setCorrectionNo(String correctionNo) { this.correctionNo = correctionNo; }
     public void setFullName(String fullName) { this.fullName = fullName; }
@@ -107,8 +123,12 @@ public class CorrectionObject {
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
     public void setPhone(String phone) { this.phone = phone; }
     public void setReportDay(String reportDay) { this.reportDay = reportDay; }
-    public void setLastLocationAt(LocalDateTime lastLocationAt) { this.lastLocationAt = lastLocationAt; }
+    public void setLastLocationAt(Instant lastLocationAt) { this.lastLocationAt = lastLocationAt; }
     public void setLastLat(Double lastLat) { this.lastLat = lastLat; }
     public void setLastLng(Double lastLng) { this.lastLng = lastLng; }
     public void setLastInsideFence(Boolean lastInsideFence) { this.lastInsideFence = lastInsideFence; }
+    public void setLastForbidden(Boolean lastForbidden) { this.lastForbidden = lastForbidden; }
+    public void setLastBattery(Integer lastBattery) { this.lastBattery = lastBattery; }
+    public void setLastSignal(Integer lastSignal) { this.lastSignal = lastSignal; }
+    public void setLastWorn(Boolean lastWorn) { this.lastWorn = lastWorn; }
 }

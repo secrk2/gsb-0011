@@ -27,7 +27,7 @@
     root.innerHTML = `
       <div class="page-head">
         <h2>🎯 矫务作战台</h2>
-        <div class="desc">数据日期 ${UI.esc(d.today)} · 在矫口径 = 在矫 + 请假外出 + 训诫（监外执行中）</div>
+        <div class="desc">UTC 当前时间 ${UI.esc(d.utcToday)}（各条目按对象所在司法所时区判定“今天”） · 在矫口径 = 在矫 + 请假外出 + 训诫（监外执行中）</div>
       </div>
 
       <div class="stat-row">
@@ -136,7 +136,7 @@
         <span class="red-dot" style="${it.checkedToday ? 'visibility:hidden' : ''}"></span>
         <div style="flex:1;min-width:0">
           <div><b>${UI.esc(it.maskedName)}</b> <span style="color:var(--ink-muted);font-size:12px">${UI.esc(it.correctionNo)}</span></div>
-          <div style="font-size:12px;color:var(--ink-muted)">${UI.esc(it.officeName)} · 规定 ${UI.WEEK_LABEL[it.reportDay] || it.reportDay} 报到</div>
+          <div style="font-size:12px;color:var(--ink-muted)">${UI.esc(it.officeName)} · 规定 ${UI.WEEK_LABEL[it.reportDay] || it.reportDay} 报到 · 当地日 ${UI.esc(it.localDate)}</div>
         </div>
         ${state}
       </div>`;
@@ -149,7 +149,7 @@
         <span class="red-dot" style="margin-top:6px"></span>
         <div class="v-body">
           <div class="v-detail">${icon} <span class="badge red" style="margin-right:6px">${UI.esc(v.typeLabel)}</span>${UI.esc(v.detail)}</div>
-          <div class="v-meta">${UI.esc(v.maskedName)} · ${UI.esc(v.correctionNo)} · ${UI.esc(v.officeName)} · ${UI.fmtDateTime(v.eventTime)}</div>
+          <div class="v-meta">${UI.esc(v.maskedName)} · ${UI.esc(v.correctionNo)} · ${UI.esc(v.officeName)} · ${UI.fmtTzFull(v.eventTime, v.timezone)}（${UI.esc(v.timezone)}）</div>
         </div>
       </div>`;
   }

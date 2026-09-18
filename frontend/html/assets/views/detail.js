@@ -83,8 +83,9 @@
                   : '<span class="badge gray">未报到</span>'}</dd>
                 <dt>最近定位</dt>
                 <dd>${o.lastLocationAt
-                  ? `${UI.fmtDateTime(o.lastLocationAt)} · ` +
+                  ? `${UI.fmtTzFull(o.lastLocationAt, o.timezone)}（${UI.esc(o.timezone)}） · ` +
                     (o.lastInsideFence ? '<span class="badge green">围栏内</span>' : '<span class="badge red">📍越界</span>')
+                    + (o.lastForbidden ? ' <span class="badge red">禁区</span>' : '')
                   : '暂无'}</dd>
               </dl>
               <div id="audit-slot"></div>
@@ -124,7 +125,7 @@
                       <b>${UI.esc(t.fromStatusLabel)}</b> → <b>${UI.esc(t.toStatusLabel)}</b>
                     </div>
                     <div class="tl-meta">
-                      ${UI.esc(t.operatorName)} · ${UI.fmtDateTime(t.operatedAt)}
+                      ${UI.esc(t.operatorName)} · ${UI.fmtTzFull(t.operatedAt, o.timezone)}
                       ${t.reason ? '· ' + UI.esc(t.reason) : ''}
                     </div>
                   </div>`).join('') : '<div style="color:var(--ink-muted);font-size:13px">暂无流转记录</div>'}
@@ -139,7 +140,7 @@
                     <span class="red-dot" style="margin-top:6px"></span>
                     <div class="v-body">
                       <div class="v-detail"><span class="badge red" style="margin-right:6px">${UI.esc(v.typeLabel)}</span>${UI.esc(v.detail)}</div>
-                      <div class="v-meta">${UI.fmtDateTime(v.eventTime)}</div>
+                      <div class="v-meta">${UI.fmtTzFull(v.eventTime, o.timezone)}（${UI.esc(o.timezone)}）</div>
                     </div>
                   </div>`).join('')
                   : '<div style="color:var(--good);font-size:13px">暂无违规记录</div>'}
@@ -203,7 +204,7 @@
                   <span style="margin-top:2px">👁</span>
                   <div class="v-body">
                     <div class="v-detail">${UI.esc(a.viewerName)}：${UI.esc(a.reason)}</div>
-                    <div class="v-meta">${UI.fmtDateTime(a.viewedAt)}</div>
+                    <div class="v-meta">${UI.fmtTzFull(a.viewedAt, o.timezone)}</div>
                   </div>
                 </div>`).join('')}
             </div>
@@ -261,7 +262,7 @@
               <tbody>
                 ${shown.map((t) => `
                   <tr>
-                    <td data-label="采集时间" style="white-space:nowrap">${UI.fmtDateTime(t.pointTime)}</td>
+                    <td data-label="采集时间" style="white-space:nowrap">${UI.fmtTzFull(t.pointTime, o.timezone)}</td>
                     <td data-label="坐标" style="font-variant-numeric:tabular-nums;font-size:12.5px">
                       ${t.lat.toFixed(5)}, ${t.lng.toFixed(5)}</td>
                     <td data-label="来源">${t.offlineCaptured

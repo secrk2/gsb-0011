@@ -1,13 +1,15 @@
 /* ============================================================
- * 离线定位队列（矫正对象手机端）
+ * 腕表离线定位队列（矫正对象端）
+ * - 每 5 秒一帧：GPS 坐标 + 设备状态（电量/信号/是否佩戴）
+ * - 时间一律取 UTC 瞬间（ISO-8601 带 Z），不发送设备本地墙钟，
+ *   服务端按司法所时区判定“今天/禁行时段”，杜绝跨时区误判
  * - 断网期间定位点写入本地队列（localStorage 持久化，杀进程不丢）
  * - 恢复网络后整队列批量补传；服务端按 clientPointId 幂等去重、
- *   按采集时间合并，重放不产生重复轨迹点
- * - 定位时间取自 GPS 采集时刻，旧点/伪造点由服务端拒绝，本地照实记录
+ *   按采集时间合并，并做 GPS 漂移质检，重放不产生重复轨迹点
  * ============================================================ */
 (function (global) {
-  const QUEUE_KEY = 'jwt_track_queue_v1';
-  const LOG_KEY = 'jwt_track_log_v1';
+  const QUEUE_KEY = 'jwt_track_queue_v2';
+  const LOG_KEY = 'jwt_track_log_v2';
 
   function load(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key) || 'null') || fallback; }
@@ -21,11 +23,9 @@
       + '-' + Math.random().toString(36).slice(2, 6);
   }
 
-  /** 转无时区 ISO（匹配后端 LocalDateTime），用浏览器本地时钟分量 */
-  function localIso(d) {
-    const p = (n) => String(n).padStart(2, '0');
-    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
-      + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  /** UTC 瞬间 ISO（带 Z），匹配后端 Instant；替代旧的“无时区本地时间” */
+  function utcIso(d) {
+    return new Date(d.getTime()).toISOString();
   }
 
   const TrackQueue = {
@@ -36,8 +36,17 @@
     simOffline: false,
     syncing: false,
     listeners: [],
+    // 腕表设备状态（真实设备由蓝牙/系统 API 提供，演示可手动模拟）
+    device: load('jwt_device_v1', { battery: 97, signal: 4, worn: true }),
 
     get effectiveOnline() { return this.online && !this.simOffline; },
+
+    saveDevice() { save('jwt_device_v1', this.device); },
+    setDevice(patch) {
+      Object.assign(this.device, patch);
+      this.saveDevice();
+      this.emit();
+    },
 
     onChange(fn) { this.listeners.push(fn); },
     /** 视图级监听：重复进入页面时替换旧回调，避免叠加触发已销毁视图 */
@@ -55,6 +64,7 @@
         queueCount: this.queue.length,
         logs: this.logs.slice(0, 30),
         syncing: this.syncing,
+        device: Object.assign({}, this.device),
       };
     },
 
@@ -95,28 +105,35 @@
       save(LOG_KEY, this.logs);
     },
 
-    /** 采集一个定位点；offlineCaptured 按“采集瞬间是否在线”如实标记 */
+    /**
+     * 采集一个定位帧（每 5 秒）；offlineCaptured 按“采集瞬间是否在线”如实标记。
+     * 帧内携带设备状态电量/信号/佩戴。
+     */
     capture(lat, lng, fixAgeSeconds) {
       const now = new Date();
       const point = {
         clientPointId: uuid(),
-        pointTime: localIso(now),
+        pointTime: utcIso(now),
         lat: Number(lat.toFixed(6)),
         lng: Number(lng.toFixed(6)),
         offlineCaptured: !this.effectiveOnline,
+        battery: this.device.battery,
+        signal: this.device.signal,
+        worn: this.device.worn,
       };
       this.queue.push(point);
       save(QUEUE_KEY, this.queue);
       const where = this.effectiveOnline ? '在线实时点，待上报' : '离线缓存点';
       this.log(this.effectiveOnline ? 'OK' : 'OFFLINE',
         `采集定位（${where}）${point.lat.toFixed(4)},${point.lng.toFixed(4)}`
-          + (fixAgeSeconds != null ? `，定位龄 ${fixAgeSeconds}s` : ''));
+          + (fixAgeSeconds != null ? `，定位龄 ${fixAgeSeconds}s` : '')
+          + `｜🔋${this.device.battery}% 📶${this.device.signal} ${this.device.worn ? '已佩戴' : '未佩戴'}`);
       this.emit();
       if (this.effectiveOnline) this.sync();
       return point;
     },
 
-    /** 整队列补传；幂等由服务端按 clientPointId 保证，重放安全 */
+    /** 整队列补传；幂等/漂移质检由服务端裁决，重放安全 */
     async sync() {
       if (this.syncing || this.queue.length === 0) return;
       if (!navigator.onLine || this.simOffline) { this.emit(); return; }
@@ -128,24 +145,26 @@
       try {
         const result = await Api.post('/offender/tracks', { points: batch });
         const remaining = this.queue.filter((p) => !ids.has(p.clientPointId));
-        // 理论上服务端处理整批；保留任何未在发送批次中的新采集点
         this.queue = remaining;
         save(QUEUE_KEY, this.queue);
 
         if (result.duplicates > 0) {
           this.log('DUP', `合并补传完成：${result.duplicates} 个重复点被幂等去重，未产生重复轨迹`);
         }
-        if (result.rejected > 0) {
-          (result.rejectedPoints || []).forEach((r) =>
+        if (result.driftDiscarded > 0) {
+          this.log('DRIFT', `${result.driftDiscarded} 个点连续跳变速度异常，服务端判 GPS 漂移丢弃（不连线、不报警）`);
+        }
+        if (result.rejectedPoints && result.rejectedPoints.length) {
+          result.rejectedPoints
+            .filter((r) => !/漂移/.test(r.reason))
+            .forEach((r) =>
             this.log('REJECT', `旧位置点 ${r.clientPointId.slice(0, 8)} 被服务端拒绝：${r.reason}`));
         }
         if (result.accepted > 0) {
-          this.log('OK', `补传成功：${result.accepted} 个轨迹点已按采集时间合并入库`
+          this.log('OK', `补传成功：${result.accepted} 个轨迹点已按采集时间(UTC)合并入库`
             + (result.outsideFence ? `，其中 ${result.outsideFence} 个点越界` : '')
-            + (result.newViolationGenerated ? '，已生成越界预警' : ''));
-        }
-        if (result.accepted === 0 && result.duplicates === 0 && result.rejected > 0) {
-          this.log('REJECT', '本批全部为失效旧位置点，均未采信');
+            + (result.forbidden ? `，${result.forbidden} 个点进入禁区` : '')
+            + (result.newViolationGenerated ? '，已生成预警' : ''));
         }
       } catch (e) {
         if (e.offline || e.code === 'NETWORK_OFFLINE') {
@@ -168,5 +187,5 @@
   };
 
   global.TrackQueue = TrackQueue;
-  global.localIso = localIso;
+  global.localIso = utcIso;
 })(window);

@@ -8,7 +8,9 @@ import cn.sfj.jiaowutong.web.vo.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 
@@ -74,8 +76,12 @@ public class ObjectService {
                 .findTop20ByOffender_IdOrderByEventTimeDesc(id).stream()
                 .map(v -> toRedDot(v, o)).toList();
 
-        boolean checkedToday = checkInRepository.existsByOffender_IdAndCheckDate(id, LocalDate.now());
-        long trackCount = trackPointRepository.findByOffender_IdOrderByPointTimeAscIdAsc(id).size();
+        // “今日”按对象所在司法所时区
+        ZoneId zone = FenceService.safeZone(o.getOffice().getTimezone());
+        LocalDate localToday = Instant.now().atZone(zone).toLocalDate();
+        boolean checkedToday = checkInRepository.existsByOffender_IdAndCheckDate(id, localToday);
+        long trackCount = trackPointRepository
+                .countByOffender_IdAndResult(id, TrackPoint.IngestResult.ACCEPTED);
 
         return new ObjectDetailView(base, transitions, violations, checkedToday, trackCount);
     }
@@ -115,20 +121,24 @@ public class ObjectService {
         if (target == CorrectionStatus.ADMONISHED) {
             violationRepository.save(new ViolationEvent(o, "ADMONISH",
                     "对象 " + o.getMaskedName() + " 因违规被训诫" + (reason == null || reason.isBlank() ? "" : "：" + reason),
-                    java.time.LocalDateTime.now()));
+                    Instant.now()));
         }
 
         return new TransitionView(from.name(), from.getLabel(),
-                target.name(), target.getLabel(), reason, user.realName(),
-                java.time.LocalDateTime.now());
+                target.name(), target.getLabel(), reason, user.realName(), Instant.now());
     }
 
+    /** 轨迹回放：仅 ACCEPTED 点；漂移丢弃点不入轨迹，重复补传点本就不入库 */
     @Transactional(readOnly = true)
     public List<TrackView> tracks(Long id, LoginUser user) {
         CorrectionObject o = accessControl.loadVisible(id, user);
-        return trackPointRepository.findByOffender_IdOrderByPointTimeAscIdAsc(id).stream()
+        return trackPointRepository
+                .findByOffender_IdAndResultOrderByPointTimeAscIdAsc(id, TrackPoint.IngestResult.ACCEPTED)
+                .stream()
                 .map(t -> new TrackView(t.getClientPointId(), t.getPointTime(), t.getLat(), t.getLng(),
-                        t.getOfflineCaptured(), t.getReceivedAt(), t.getOutsideFence()))
+                        t.getOfflineCaptured(), t.getReceivedAt(), t.getOutsideFence(),
+                        Boolean.TRUE.equals(t.getForbiddenZone()), t.getResult().name(),
+                        t.getBattery(), t.getSignal(), t.getWorn()))
                 .toList();
     }
 
@@ -143,14 +153,15 @@ public class ObjectService {
     static DashboardView.RedDotItem toRedDot(ViolationEvent v, CorrectionObject o) {
         return new DashboardView.RedDotItem(
                 v.getId(), o.getId(), o.getCorrectionNo(), o.getMaskedName(),
-                o.getOffice().getName(), v.getType(), typeLabel(v.getType()),
-                v.getDetail(), v.getEventTime().toString().replace('T', ' '),
-                v.getReadFlag());
+                o.getOffice().getName(), o.getOffice().getTimezone(),
+                v.getType(), typeLabel(v.getType()),
+                v.getDetail(), v.getEventTime(), v.getReadFlag());
     }
 
     static String typeLabel(String type) {
         return switch (type) {
             case "GEOFENCE_BREACH" -> "越界";
+            case "FORBIDDEN_ZONE" -> "禁区闯入";
             case "ABSENT" -> "未按日报到";
             case "ADMONISH" -> "训诫";
             default -> type;

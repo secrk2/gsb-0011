@@ -3,7 +3,7 @@ package cn.sfj.jiaowutong.domain;
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 日常报到记录。
@@ -26,7 +26,7 @@ public class CheckIn {
     private LocalDate checkDate;
 
     @Column(nullable = false)
-    private LocalDateTime checkedAt;
+    private Instant checkedAt;
 
     /** 报到方式：APP / 当面 */
     @Column(nullable = false, length = 16)
@@ -42,7 +42,7 @@ public class CheckIn {
     public CheckIn() {
     }
 
-    public CheckIn(CorrectionObject offender, LocalDate checkDate, LocalDateTime checkedAt,
+    public CheckIn(CorrectionObject offender, LocalDate checkDate, Instant checkedAt,
                    String method, Double lat, Double lng, Boolean insideFence) {
         this.offender = offender;
         this.checkDate = checkDate;
@@ -56,7 +56,7 @@ public class CheckIn {
     public Long getId() { return id; }
     public CorrectionObject getOffender() { return offender; }
     public LocalDate getCheckDate() { return checkDate; }
-    public LocalDateTime getCheckedAt() { return checkedAt; }
+    public Instant getCheckedAt() { return checkedAt; }
     public String getMethod() { return method; }
     public Double getLat() { return lat; }
     public Double getLng() { return lng; }

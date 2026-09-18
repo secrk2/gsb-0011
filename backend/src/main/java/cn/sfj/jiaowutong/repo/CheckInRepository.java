@@ -11,4 +11,6 @@ public interface CheckInRepository extends JpaRepository<CheckIn, Long> {
     boolean existsByOffender_IdAndCheckDate(Long offenderId, LocalDate checkDate);
 
     List<CheckIn> findByOffender_IdAndCheckDate(Long offenderId, LocalDate checkDate);
+
+    List<CheckIn> findByOffender_IdOrderByCheckDateAscIdAsc(Long offenderId);
 }

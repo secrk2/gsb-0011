@@ -23,7 +23,9 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
-    time-zone: Asia/Shanghai
+    # 时间戳（Instant）一律序列化为 UTC ISO-8601（带 Z），不随容器 TZ 变化；
+    # 跨时区展示由前端按司法所时区换算
+    time-zone: UTC
   h2:
     console:
       enabled: true

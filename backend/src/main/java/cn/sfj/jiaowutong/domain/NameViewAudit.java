@@ -2,7 +2,7 @@ package cn.sfj.jiaowutong.domain;
 
 import jakarta.persistence.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 全名查看留痕：监管员/干警查看脱敏对象全名时，必须填写理由。
@@ -29,7 +29,7 @@ public class NameViewAudit {
     private String reason;
 
     @Column(nullable = false)
-    private LocalDateTime viewedAt;
+    private Instant viewedAt;
 
     public NameViewAudit() {
     }
@@ -39,7 +39,7 @@ public class NameViewAudit {
         this.viewerId = viewerId;
         this.viewerName = viewerName;
         this.reason = reason;
-        this.viewedAt = LocalDateTime.now();
+        this.viewedAt = Instant.now();
     }
 
     public Long getId() { return id; }
@@ -47,5 +47,5 @@ public class NameViewAudit {
     public Long getViewerId() { return viewerId; }
     public String getViewerName() { return viewerName; }
     public String getReason() { return reason; }
-    public LocalDateTime getViewedAt() { return viewedAt; }
+    public Instant getViewedAt() { return viewedAt; }
 }

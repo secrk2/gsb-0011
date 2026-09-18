@@ -40,7 +40,8 @@
               ? '<span class="badge green">✅ 已报到</span>'
               : '<span class="badge gray">🕒 尚未报到</span>'}</dd>
             <dt>最近定位</dt><dd>${o.lastLocationAt
-              ? UI.fmtDateTime(o.lastLocationAt) + (o.lastInsideFence ? '（围栏内）' : '（<span style="color:var(--critical)">越界</span>）')
+              ? UI.fmtTzFull(o.lastLocationAt, o.timezone) + '（' + UI.esc(o.timezone) + '）'
+                + (o.lastInsideFence ? '（围栏内）' : '（<span style="color:var(--critical)">越界</span>）')
               : '暂无'}</dd>
           </dl>
         </div>
@@ -53,6 +54,7 @@
             <button class="btn sm" id="btn-gps">🛰 获取真实 GPS 定位</button>
             <button class="btn sm" id="btn-fix-in">模拟定位（围栏内）</button>
             <button class="btn sm" id="btn-fix-out">模拟定位（围栏外）</button>
+            <button class="btn sm" id="btn-fix-forbid">模拟定位（进入禁区）</button>
           </div>
           <button class="big-check-btn" id="btn-checkin">今日报到</button>
           <div style="margin-top:10px">
@@ -62,10 +64,20 @@
         </div>
 
         <div class="phone-card">
+          <h3>⌚ 腕表设备状态（每 5 秒随定位回传）</h3>
+          <div id="device-state" class="track-summary" style="margin-bottom:10px"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn sm" id="btn-dev-batt">切换电量</button>
+            <button class="btn sm" id="btn-dev-signal">切换信号</button>
+            <button class="btn sm" id="btn-dev-worn">切换佩戴</button>
+          </div>
+        </div>
+
+        <div class="phone-card">
           <h3>🧭 离线定位与补传</h3>
           <div style="font-size:12.5px;color:var(--ink-secondary);margin-bottom:10px">
-            山区信号差时可先断网，定位点本地缓存（杀进程不丢）；信号恢复后整队列合并补传，
-            服务端按点位编号幂等去重，重复发送不会产生重复轨迹。
+            腕表每 <b>5 秒</b>回传一帧 GPS 与设备状态（UTC 时间）。山区信号差时定位点本地缓存（杀进程不丢）；
+            信号恢复后整队列合并补传，服务端幂等去重并做漂移质检，重复/跳变点不会污染轨迹。
           </div>
           <div id="queue-state" class="track-summary" style="margin-bottom:10px"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -85,8 +97,9 @@
 
     // ----- 定位 -----
     root.querySelector('#btn-gps').onclick = acquireGps;
-    root.querySelector('#btn-fix-in').onclick = () => simulatedFix(false);
-    root.querySelector('#btn-fix-out').onclick = () => simulatedFix(true);
+    root.querySelector('#btn-fix-in').onclick = () => simulatedFix('in');
+    root.querySelector('#btn-fix-out').onclick = () => simulatedFix('out');
+    root.querySelector('#btn-fix-forbid').onclick = () => simulatedFix('forbid');
 
     function refreshFixState() {
       const el = root.querySelector('#fix-state');
@@ -98,7 +111,8 @@
       }
       const ageSec = Math.round((Date.now() - currentFix.fixTs) / 1000);
       const stale = ageSec > 300;
-      const where = currentFix.inside ? '围栏内' : '<span class="bad">围栏外</span>';
+      const where = currentFix.mode === 'forbid' ? '<span class="bad">禁区内</span>'
+        : currentFix.mode === 'out' ? '<span class="bad">围栏外</span>' : '围栏内';
       if (stale) {
         el.className = 'loc-state';
         el.innerHTML = `<span class="stale">⚠ 定位已过 ${Math.round(ageSec / 60)} 分钟，属旧位置</span>
@@ -113,18 +127,32 @@
     if (fixTimer) clearInterval(fixTimer);
     fixTimer = setInterval(refreshFixState, 5000);
 
-    function simulatedFix(outside) {
-      // 以档案围栏中心生成：围栏内偏移 ~0.001°，围栏外偏移 ~0.022°（约 2km+）
-      const off = outside ? 0.022 : 0.0012;
-      currentFix = {
-        lat: o.fenceCenterLat + off,
-        lng: o.fenceCenterLng + (outside ? 0.006 : -0.0006),
-        fixTs: Date.now(),
-        source: outside ? 'sim-out' : 'sim-in',
-        inside: !outside,
-      };
+    // 各所禁区演示坐标（与种子多边形对齐：青山尾矿库 / 龙湖废弃码头 / 城关火车站 / 伊宁活动区内）
+    const FORBID_FIX = {
+      1: [30.2230, 114.3530], 2: [30.3580, 114.5000], 3: [30.1062, 114.2222],
+    };
+    function simulatedFix(mode) {
+      if (mode === 'forbid') {
+        const fp = FORBID_FIX[o.officeId] || FORBID_FIX[2];
+        currentFix = {
+          lat: fp[0], lng: fp[1], fixTs: Date.now(), source: 'sim-forbid', mode: 'forbid',
+        };
+      } else {
+        const outside = mode === 'out';
+        // 以档案围栏中心生成：围栏内偏移 ~0.001°，围栏外偏移 ~0.022°（约 2km+）
+        const off = outside ? 0.022 : 0.0012;
+        currentFix = {
+          lat: o.fenceCenterLat + off,
+          lng: o.fenceCenterLng + (outside ? 0.006 : -0.0006),
+          fixTs: Date.now(),
+          source: outside ? 'sim-out' : 'sim-in',
+          mode: outside ? 'out' : 'in',
+        };
+      }
       refreshFixState();
-      UI.toast(outside ? '已获取定位：当前在电子围栏外' : '已获取定位：当前在电子围栏内', outside ? 'warn' : 'success');
+      UI.toast(mode === 'forbid' ? '已获取定位：当前进入电子禁区'
+        : mode === 'out' ? '已获取定位：当前在电子围栏外' : '已获取定位：当前在电子围栏内',
+        mode === 'in' ? 'success' : 'warn');
     }
 
     function acquireGps() {
@@ -221,9 +249,38 @@
         autoTimer = setInterval(() => {
           const fix = pickCaptureFix(o);
           TrackQueue.capture(fix.lat, fix.lng, fix.age);
-        }, 10000);
+        }, 5000);
       }
     };
+
+    // ----- 腕表设备状态模拟 -----
+    root.querySelector('#btn-dev-batt').onclick = () => {
+      const seq = [97, 58, 12, 3];
+      const d = TrackQueue.device;
+      const next = seq[(seq.indexOf(d.battery) + 1) % seq.length];
+      TrackQueue.setDevice({ battery: next });
+      UI.toast('模拟电量：' + next + '%');
+    };
+    root.querySelector('#btn-dev-signal').onclick = () => {
+      const d = TrackQueue.device;
+      TrackQueue.setDevice({ signal: d.signal === 0 ? 4 : d.signal - 1 });
+      UI.toast('模拟信号强度：' + TrackQueue.device.signal + '/4');
+    };
+    root.querySelector('#btn-dev-worn').onclick = () => {
+      TrackQueue.setDevice({ worn: !TrackQueue.device.worn });
+      UI.toast(TrackQueue.device.worn ? '模拟腕表已佩戴' : '模拟腕表被摘下（脱腕）',
+        TrackQueue.device.worn ? 'success' : 'warn');
+    };
+    function renderDevice(snap) {
+      const el = root.querySelector('#device-state');
+      if (!el) return;
+      const d = snap.device;
+      el.innerHTML = `
+        <span>电量：<b style="color:${d.battery < 20 ? 'var(--critical)' : 'inherit'}">🔋 ${d.battery}%</b>
+          ${d.battery < 20 ? '<span class="badge red" style="margin-left:4px">低电</span>' : ''}</span>
+        <span>信号：<b>📶 ${d.signal}/4</b> ${d.signal === 0 ? '<span class="badge red" style="margin-left:4px">无信号</span>' : ''}</span>
+        <span>佩戴：<b>${d.worn ? '⌚ 已佩戴' : '<span style="color:var(--critical)">⚠ 未佩戴（脱腕）</span>'}</b></span>`;
+    }
 
     function renderQueue(snap) {
       const qs = root.querySelector('#queue-state');
@@ -251,7 +308,8 @@
       }
 
       root.querySelector('#btn-simoff').textContent = '模拟断网：' + (snap.simOffline ? '开' : '关');
-      root.querySelector('#btn-auto').textContent = '自动采集：' + (autoTimer ? '开' : '关');
+      root.querySelector('#btn-auto').textContent = '自动采集（5秒）：' + (autoTimer ? '开' : '关');
+      renderDevice(snap);
       root.querySelector('#log-list').innerHTML = snap.logs.map((l) => `
         <div class="log-item ${l.type}"><span class="t">${UI.esc(l.time)}</span><span>${UI.esc(l.msg)}</span></div>`).join('')
         || '<div style="color:var(--ink-muted);font-size:12.5px">暂无日志</div>';

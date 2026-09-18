@@ -77,10 +77,11 @@
           <tbody>
             ${items.map((o) => {
               const loc = o.lastLocationAt
-                ? `${UI.fmtDateTime(o.lastLocationAt)} ` +
+                ? `${UI.fmtTzFull(o.lastLocationAt, o.timezone)} ` +
                   (o.lastInsideFence
                     ? '<span class="badge green" style="margin-left:4px">围栏内</span>'
                     : '<span class="badge red" style="margin-left:4px">📍越界</span>')
+                    + (o.lastForbidden ? '<span class="badge red" style="margin-left:4px">禁区</span>' : '')
                 : '<span style="color:var(--ink-muted)">无定位</span>';
               return `
               <tr class="clickable" data-id="${o.id}">

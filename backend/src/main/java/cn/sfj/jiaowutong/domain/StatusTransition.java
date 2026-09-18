@@ -2,7 +2,7 @@ package cn.sfj.jiaowutong.domain;
 
 import jakarta.persistence.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 档案状态流转记录（状态机留痕）。
@@ -36,7 +36,7 @@ public class StatusTransition {
     private String reason;
 
     @Column(nullable = false)
-    private LocalDateTime operatedAt;
+    private Instant operatedAt;
 
     public StatusTransition() {
     }
@@ -49,7 +49,7 @@ public class StatusTransition {
         this.operatorId = operatorId;
         this.operatorName = operatorName;
         this.reason = reason;
-        this.operatedAt = LocalDateTime.now();
+        this.operatedAt = Instant.now();
     }
 
     public Long getId() { return id; }
@@ -59,5 +59,5 @@ public class StatusTransition {
     public Long getOperatorId() { return operatorId; }
     public String getOperatorName() { return operatorName; }
     public String getReason() { return reason; }
-    public LocalDateTime getOperatedAt() { return operatedAt; }
+    public Instant getOperatedAt() { return operatedAt; }
 }

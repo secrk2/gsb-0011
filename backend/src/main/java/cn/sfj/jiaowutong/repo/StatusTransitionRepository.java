@@ -8,4 +8,7 @@ import java.util.List;
 public interface StatusTransitionRepository extends JpaRepository<StatusTransition, Long> {
 
     List<StatusTransition> findByOffenderIdOrderByOperatedAtDescIdDesc(Long offenderId);
+
+    List<StatusTransition> findByOffenderIdAndToStatusOrderByOperatedAtDescIdDesc(
+            Long offenderId, cn.sfj.jiaowutong.domain.CorrectionStatus toStatus);
 }

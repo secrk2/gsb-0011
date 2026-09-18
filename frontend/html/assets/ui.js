@@ -28,6 +28,49 @@
     return String(s).replace('T', ' ').slice(0, 16);
   }
 
+  // ---------- UTC 时刻 → 指定 IANA 时区展示 ----------
+  // 后端时间一律 UTC（ISO 带 Z）；“今天/星期/时段”全部按对象所属司法所时区换算，
+  // 不能用干警浏览器时区，否则跨时区对象会把越界算错。
+  function tzParts(s, tz) {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return null;
+    const dtf = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz || 'Asia/Shanghai', hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'short',
+    });
+    const m = {};
+    dtf.formatToParts(d).forEach((p) => { m[p.type] = p.value; });
+    if (m.hour === '24') m.hour = '00';
+    return m;
+  }
+
+  /** UTC ISO → "MM-dd HH:mm:ss"（按 tz） */
+  function fmtTz(s, tz) {
+    const m = tzParts(s, tz);
+    return m ? `${m.month}-${m.day} ${m.hour}:${m.minute}:${m.second}` : '—';
+  }
+  /** UTC ISO → "yyyy-MM-dd HH:mm"（按 tz） */
+  function fmtTzFull(s, tz) {
+    const m = tzParts(s, tz);
+    return m ? `${m.year}-${m.month}-${m.day} ${m.hour}:${m.minute}` : '—';
+  }
+  function fmtTzClock(s, tz) {
+    const m = tzParts(s, tz);
+    return m ? `${m.hour}:${m.minute}:${m.second}` : '—';
+  }
+  function tzDate(s, tz) {
+    const m = tzParts(s, tz);
+    return m ? `${m.year}-${m.month}-${m.day}` : '';
+  }
+  /** 心跳年龄（秒）→ 中文年龄文案 */
+  function fmtAge(sec) {
+    if (sec == null) return '从无回传';
+    if (sec < 60) return sec + ' 秒前';
+    if (sec < 3600) return Math.floor(sec / 60) + ' 分钟前';
+    return Math.floor(sec / 3600) + ' 小时前';
+  }
+
   let toastTimer = new Map();
   function toast(message, type) {
     type = type || 'info';
@@ -114,6 +157,7 @@
 
   global.UI = {
     esc, statusBadge, fmtDateTime, toast, confirmModal, alertModal,
+    fmtTz, fmtTzFull, fmtTzClock, tzDate, fmtAge, tzParts,
     statusIcon: (s) => STATUS_ICON[s] || '',
     STATUS_LABEL, STATUS_ICON, WEEK_LABEL,
   };
