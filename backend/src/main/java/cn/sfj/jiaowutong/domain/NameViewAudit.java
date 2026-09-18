@@ -39,7 +39,7 @@ public class NameViewAudit {
         this.viewerId = viewerId;
         this.viewerName = viewerName;
         this.reason = reason;
-        this.viewedAt = LocalDateTime.now();
+        this.viewedAt = cn.sfj.jiaowutong.common.time.TimeZones.utcNow();
     }
 
     public Long getId() { return id; }

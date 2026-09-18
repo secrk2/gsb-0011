@@ -12,6 +12,13 @@
     MONDAY: '周一', TUESDAY: '周二', WEDNESDAY: '周三', THURSDAY: '周四',
     FRIDAY: '周五', SATURDAY: '周六', SUNDAY: '周日',
   };
+  const DEVICE_LABEL = {
+    NORMAL: '设备正常', LOW_BATTERY: '低电量', NO_SIGNAL: '定位信号中断',
+    POWER_OFF: '腕表关机', NONE: '无回传',
+  };
+  const DEVICE_ICON = {
+    NORMAL: '🔋', LOW_BATTERY: '🪫', NO_SIGNAL: '📵', POWER_OFF: '⭕', NONE: '❔',
+  };
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -26,6 +33,33 @@
   function fmtDateTime(s) {
     if (!s) return '—';
     return String(s).replace('T', ' ').slice(0, 16);
+  }
+
+  // 后端所有时间为 UTC（Z 结尾）。界面统一按“对象所在司法所时区”换算显示，
+  // 不能直接用浏览器本地时区（干警浏览器可能与对象所在地跨时区/跨夏令时）。
+  function tzParts(isoUtc, zoneId) {
+    const d = new Date(isoUtc);
+    if (isNaN(d.getTime())) return null;
+    const fmt = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: zoneId || 'Asia/Shanghai',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    });
+    const p = {};
+    fmt.formatToParts(d).forEach((x) => { p[x.type] = x.value; });
+    return p;
+  }
+
+  /** UTC ISO → “yyyy-MM-dd HH:mm”，按指定 IANA 时区 */
+  function tzText(isoUtc, zoneId) {
+    const p = tzParts(isoUtc, zoneId);
+    return p ? `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}` : '—';
+  }
+
+  /** UTC ISO 已过去多久（秒） */
+  function tzAgeSec(isoUtc) {
+    const t = new Date(isoUtc).getTime();
+    return isNaN(t) ? null : Math.max(0, Math.round((Date.now() - t) / 1000));
   }
 
   let toastTimer = new Map();
@@ -113,8 +147,10 @@
   }
 
   global.UI = {
-    esc, statusBadge, fmtDateTime, toast, confirmModal, alertModal,
+    esc, statusBadge, fmtDateTime, tzText, tzParts, tzAgeSec, toast, confirmModal, alertModal,
     statusIcon: (s) => STATUS_ICON[s] || '',
-    STATUS_LABEL, STATUS_ICON, WEEK_LABEL,
+    deviceLabel: (s) => DEVICE_LABEL[s] || (s || '—'),
+    deviceIcon: (s) => DEVICE_ICON[s] || '❔',
+    STATUS_LABEL, STATUS_ICON, WEEK_LABEL, DEVICE_LABEL, DEVICE_ICON,
   };
 })(window);

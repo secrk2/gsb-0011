@@ -39,8 +39,9 @@
             <dt>今日报到</dt><dd id="checkin-state">${detail.checkedToday
               ? '<span class="badge green">✅ 已报到</span>'
               : '<span class="badge gray">🕒 尚未报到</span>'}</dd>
-            <dt>最近定位</dt><dd>${o.lastLocationAt
-              ? UI.fmtDateTime(o.lastLocationAt) + (o.lastInsideFence ? '（围栏内）' : '（<span style="color:var(--critical)">越界</span>）')
+            <dt>最近定位</dt><dd>${o.lastPointUtc
+              ? UI.tzText(o.lastPointUtc, o.zoneId) + (o.lastInsideFence === false
+                  ? '（<span style="color:var(--critical)">越界</span>）' : '（围栏内）')
               : '暂无'}</dd>
           </dl>
         </div>
@@ -205,10 +206,10 @@
       }
     };
 
-    // ----- 离线定位 -----
+    // ----- 离线定位（腕表每 5 秒回传一次；断网时本地缓存、恢复后补传） -----
     root.querySelector('#btn-capture').onclick = () => {
       const fix = pickCaptureFix(o);
-      TrackQueue.capture(fix.lat, fix.lng, fix.age);
+      TrackQueue.capture(fix.lat, fix.lng, fix.age, 'NORMAL', deviceBattery());
     };
     root.querySelector('#btn-sync').onclick = () => TrackQueue.sync();
     root.querySelector('#btn-simoff').onclick = (e) => {
@@ -218,12 +219,20 @@
       if (autoTimer) {
         clearInterval(autoTimer); autoTimer = null;
       } else {
+        // 模拟腕表 5 秒一回报
         autoTimer = setInterval(() => {
           const fix = pickCaptureFix(o);
-          TrackQueue.capture(fix.lat, fix.lng, fix.age);
-        }, 10000);
+          TrackQueue.capture(fix.lat, fix.lng, fix.age, 'NORMAL', deviceBattery());
+        }, 5000);
       }
     };
+
+    // 演示用：模拟腕表电量在 58%~96% 间缓慢变化
+    let battery = 73;
+    function deviceBattery() {
+      battery = Math.max(5, battery - Math.floor(Math.random() * 2));
+      return battery;
+    }
 
     function renderQueue(snap) {
       const qs = root.querySelector('#queue-state');

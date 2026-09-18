@@ -143,13 +143,15 @@
   }
 
   function redItem(v) {
-    const icon = v.type === 'GEOFENCE_BREACH' ? '📍' : v.type === 'ABSENT' ? '🚨' : '⚠️';
+    const icon = ['GEOFENCE_BREACH', 'BREACH_FORBIDDEN_DAY', 'MARK_BREACH'].includes(v.type) ? '📍'
+      : v.type === 'DEVICE_ALERT' ? '📵'
+      : v.type === 'ABSENT' ? '🚨' : '⚠️';
     return `
       <div class="violation-item" data-object-id="${v.objectId}">
         <span class="red-dot" style="margin-top:6px"></span>
         <div class="v-body">
           <div class="v-detail">${icon} <span class="badge red" style="margin-right:6px">${UI.esc(v.typeLabel)}</span>${UI.esc(v.detail)}</div>
-          <div class="v-meta">${UI.esc(v.maskedName)} · ${UI.esc(v.correctionNo)} · ${UI.esc(v.officeName)} · ${UI.fmtDateTime(v.eventTime)}</div>
+          <div class="v-meta">${UI.esc(v.maskedName)} · ${UI.esc(v.correctionNo)} · ${UI.esc(v.officeName)} · ${UI.esc(v.eventTimeLocal)}</div>
         </div>
       </div>`;
   }

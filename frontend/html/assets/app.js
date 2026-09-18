@@ -8,6 +8,8 @@
     { re: /^#\/dashboard$/, view: 'dashboard' },
     { re: /^#\/objects$/, view: 'objects' },
     { re: /^#\/objects\/(\d+)$/, view: 'detail' },
+    { re: /^#\/monitor$/, view: 'monitor' },
+    { re: /^#\/monitor\/(\d+)$/, view: 'monitorDetail' },
     { re: /^#\/offender$/, view: 'offender' },
   ];
 
@@ -27,11 +29,14 @@
     return [
       { hash: '#/dashboard', icon: '🎯', label: '矫务作战台', view: 'dashboard' },
       { hash: '#/objects', icon: '🗂️', label: '对象档案', view: 'objects' },
+      { hash: '#/monitor', icon: '🛰️', label: '定位监控', view: 'monitor' },
     ];
   }
 
   function renderShell(activeView) {
     const s = Api.getSession();
+    // 详情子页与其菜单同属一个导航项
+    const navActive = activeView === 'monitorDetail' ? 'monitor' : activeView;
     const items = navItems(s.role);
     return `
       <header class="topbar">
@@ -46,7 +51,7 @@
       <div class="layout">
         <nav class="sidebar">
           ${items.map((it) => `
-            <button class="nav-item ${it.view === activeView ? 'active' : ''}" data-hash="${it.hash}">
+            <button class="nav-item ${it.view === navActive ? 'active' : ''}" data-hash="${it.hash}">
               <span class="ico">${it.icon}</span><span class="label">${it.label}</span>
             </button>`).join('')}
           <div class="nav-hint">区司法局社区矫正<br/>自研系统 v1.0</div>
@@ -87,6 +92,11 @@
     app.innerHTML = renderShell(route.view);
     bindShell();
     const root = document.getElementById('view-root');
+    // 离开定位监控相关页面时停掉 5 秒轮询，避免后台空转
+    if (route.view !== 'monitor' && route.view !== 'monitorDetail'
+        && global.Views && Views.monitorStopAll) {
+      Views.monitorStopAll();
+    }
     const view = Views[route.view];
     try {
       await view(root, ...route.params);

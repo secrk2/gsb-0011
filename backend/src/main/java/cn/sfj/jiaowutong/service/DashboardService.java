@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 
@@ -40,9 +41,10 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public DashboardView build(LoginUser user) {
-        LocalDate today = LocalDate.now();
-        String todayWeek = today.getDayOfWeek().toString();
-        boolean overdueMoment = LocalTime.now().isAfter(OVERDUE_AFTER);
+        // 服务器统一 UTC；各司法所“今天/现在几点”按其所配置时区分别换算，不拿一个服务器本地日套用全区
+        LocalDateTime nowUtc = cn.sfj.jiaowutong.common.time.TimeZones.utcNow();
+        LocalDate serverLocalToday = cn.sfj.jiaowutong.common.time.TimeZones
+                .localDate(nowUtc, cn.sfj.jiaowutong.common.time.TimeZones.DEFAULT_ZONE);
 
         List<JudicialOffice> offices = officeRepository.findAll();
         List<CorrectionObject> all = objectRepository.findAll();
@@ -99,19 +101,28 @@ public class DashboardService {
                     intake, serving, leave, admonished, reimprisoned, released, activeTotal));
         }
 
-        // 今日应报到：在矫/请假/训诫状态中规定星期匹配者
+        // 今日应报到：每个对象按其司法所时区的“当地今天星期几/几点”判定（跨时区不串日）
         List<DashboardView.DueTodayItem> due = scoped.stream()
                 .filter(o -> EnumSet.of(CorrectionStatus.SERVING, CorrectionStatus.LEAVE,
                         CorrectionStatus.ADMONISHED).contains(o.getStatus()))
-                .filter(o -> todayWeek.equals(o.getReportDay()))
-                .sorted(Comparator.comparing(CorrectionObject::getCorrectionNo))
                 .map(o -> {
-                    boolean checked = checkInRepository.existsByOffender_IdAndCheckDate(o.getId(), today);
+                    String zone = o.getOffice().getTimezone();
+                    var zonedNow = cn.sfj.jiaowutong.common.time.TimeZones.nowAt(zone);
+                    LocalDate localToday = zonedNow.toLocalDate();
+                    String localWeek = zonedNow.getDayOfWeek().toString();
+                    boolean dueToday = localWeek.equals(o.getReportDay());
+                    if (!dueToday) {
+                        return null;
+                    }
+                    boolean checked = checkInRepository.existsByOffender_IdAndCheckDate(o.getId(), localToday);
+                    boolean overdue = !checked && zonedNow.toLocalTime().isAfter(OVERDUE_AFTER);
                     return new DashboardView.DueTodayItem(
                             o.getId(), o.getCorrectionNo(), o.getMaskedName(),
                             o.getOffice().getName(), o.getReportDay(),
-                            checked, !checked && overdueMoment);
+                            checked, overdue);
                 })
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparing(DashboardView.DueTodayItem::correctionNo))
                 .toList();
 
         // 红点：未处置事件，按范围过滤
@@ -126,7 +137,7 @@ public class DashboardService {
                 })
                 .toList();
 
-        return new DashboardView(today.toString(), user.role().name(), globalFunnel,
+        return new DashboardView(serverLocalToday.toString(), user.role().name(), globalFunnel,
                 officeFunnels, due, redDots, redDots.size());
     }
 }

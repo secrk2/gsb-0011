@@ -28,6 +28,6 @@ public record DashboardView(
 
     public record RedDotItem(Long id, Long objectId, String correctionNo, String maskedName,
                              String officeName, String type, String typeLabel, String detail,
-                             String eventTime, boolean read) {
+                             String eventTimeUtc, String eventTimeLocal, boolean read) {
     }
 }

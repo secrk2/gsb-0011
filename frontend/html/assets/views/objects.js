@@ -76,11 +76,11 @@
           </tr></thead>
           <tbody>
             ${items.map((o) => {
-              const loc = o.lastLocationAt
-                ? `${UI.fmtDateTime(o.lastLocationAt)} ` +
-                  (o.lastInsideFence
-                    ? '<span class="badge green" style="margin-left:4px">围栏内</span>'
-                    : '<span class="badge red" style="margin-left:4px">📍越界</span>')
+              const loc = o.lastPointUtc
+                ? `${UI.tzText(o.lastPointUtc, o.zoneId)} ` +
+                  (o.lastInsideFence === false
+                    ? '<span class="badge red" style="margin-left:4px">📍越界</span>'
+                    : '<span class="badge green" style="margin-left:4px">围栏内</span>')
                 : '<span style="color:var(--ink-muted)">无定位</span>';
               return `
               <tr class="clickable" data-id="${o.id}">

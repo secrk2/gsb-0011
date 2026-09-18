@@ -67,15 +67,22 @@ public class ObjectService {
                         t.getFromStatus(),
                         t.getFromStatus() == null ? "—" : labelOf(t.getFromStatus()),
                         t.getToStatus(), labelOf(t.getToStatus()),
-                        t.getReason(), t.getOperatorName(), t.getOperatedAt()))
+                        t.getReason(), t.getOperatorName(),
+                        t.getOperatedAt().toString() + "Z",
+                        cn.sfj.jiaowutong.common.time.TimeZones.fmtWall(t.getOperatedAt(),
+                                o.getOffice().getTimezone())))
                 .toList();
 
         List<DashboardView.RedDotItem> violations = violationRepository
                 .findTop20ByOffender_IdOrderByEventTimeDesc(id).stream()
                 .map(v -> toRedDot(v, o)).toList();
 
-        boolean checkedToday = checkInRepository.existsByOffender_IdAndCheckDate(id, LocalDate.now());
-        long trackCount = trackPointRepository.findByOffender_IdOrderByPointTimeAscIdAsc(id).size();
+        boolean checkedToday = checkInRepository.existsByOffender_IdAndCheckDate(
+                id, cn.sfj.jiaowutong.common.time.TimeZones.localDate(
+                        cn.sfj.jiaowutong.common.time.TimeZones.utcNow(),
+                        o.getOffice().getTimezone()));
+        long trackCount = trackPointRepository
+                .countByOffender_IdAndResult(id, TrackPoint.IngestResult.ACCEPTED);
 
         return new ObjectDetailView(base, transitions, violations, checkedToday, trackCount);
     }
@@ -92,9 +99,12 @@ public class ObjectService {
     @Transactional(readOnly = true)
     public List<NameAuditView> nameAudits(Long id, LoginUser user) {
         accessControl.assertStaffOrSupervisor(user);
-        accessControl.loadVisible(id, user);
+        CorrectionObject o = accessControl.loadVisible(id, user);
         return nameAuditRepository.findByOffenderIdOrderByViewedAtDescIdDesc(id).stream()
-                .map(a -> new NameAuditView(a.getViewerName(), a.getReason(), a.getViewedAt()))
+                .map(a -> new NameAuditView(a.getViewerName(), a.getReason(),
+                        a.getViewedAt().toString() + "Z",
+                        cn.sfj.jiaowutong.common.time.TimeZones.fmtWall(a.getViewedAt(),
+                                o.getOffice().getTimezone())))
                 .toList();
     }
 
@@ -108,27 +118,38 @@ public class ObjectService {
 
         o.setStatus(target);
         objectRepository.save(o);
-        transitionRepository.save(new StatusTransition(
-                id, from, target, user.userId(), user.realName(), reason));
+        java.time.LocalDateTime nowUtc = cn.sfj.jiaowutong.common.time.TimeZones.utcNow();
+        StatusTransition saved = new StatusTransition(
+                id, from, target, user.userId(), user.realName(), reason);
+        transitionRepository.save(saved);
 
         // 训诫本身是处置措施，同步生成一条违规处置红点
         if (target == CorrectionStatus.ADMONISHED) {
             violationRepository.save(new ViolationEvent(o, "ADMONISH",
                     "对象 " + o.getMaskedName() + " 因违规被训诫" + (reason == null || reason.isBlank() ? "" : "：" + reason),
-                    java.time.LocalDateTime.now()));
+                    nowUtc));
         }
 
         return new TransitionView(from.name(), from.getLabel(),
                 target.name(), target.getLabel(), reason, user.realName(),
-                java.time.LocalDateTime.now());
+                nowUtc.toString() + "Z",
+                cn.sfj.jiaowutong.common.time.TimeZones.fmtWall(nowUtc, o.getOffice().getTimezone()));
     }
 
     @Transactional(readOnly = true)
     public List<TrackView> tracks(Long id, LoginUser user) {
         CorrectionObject o = accessControl.loadVisible(id, user);
+        String zone = o.getOffice().getTimezone();
         return trackPointRepository.findByOffender_IdOrderByPointTimeAscIdAsc(id).stream()
-                .map(t -> new TrackView(t.getClientPointId(), t.getPointTime(), t.getLat(), t.getLng(),
-                        t.getOfflineCaptured(), t.getReceivedAt(), t.getOutsideFence()))
+                .map(t -> new TrackView(
+                        t.getClientPointId(),
+                        t.getPointTime().toString() + "Z",
+                        cn.sfj.jiaowutong.common.time.TimeZones.fmtWall(t.getPointTime(), zone),
+                        t.getLat(), t.getLng(),
+                        Boolean.TRUE.equals(t.getOfflineCaptured()),
+                        t.getReceivedAt() == null ? null : t.getReceivedAt().toString() + "Z",
+                        t.getOutsideFence(),
+                        t.getDeviceStatus(), t.getResult().name(), t.getDriftReason()))
                 .toList();
     }
 
@@ -144,13 +165,19 @@ public class ObjectService {
         return new DashboardView.RedDotItem(
                 v.getId(), o.getId(), o.getCorrectionNo(), o.getMaskedName(),
                 o.getOffice().getName(), v.getType(), typeLabel(v.getType()),
-                v.getDetail(), v.getEventTime().toString().replace('T', ' '),
+                v.getDetail(),
+                v.getEventTime().toString() + "Z",
+                cn.sfj.jiaowutong.common.time.TimeZones.fmtWall(v.getEventTime(),
+                        o.getOffice().getTimezone()),
                 v.getReadFlag());
     }
 
     static String typeLabel(String type) {
         return switch (type) {
             case "GEOFENCE_BREACH" -> "越界";
+            case "BREACH_FORBIDDEN_DAY" -> "禁行日越界";
+            case "MARK_BREACH" -> "人工标记越界";
+            case "DEVICE_ALERT" -> "设备异常";
             case "ABSENT" -> "未按日报到";
             case "ADMONISH" -> "训诫";
             default -> type;

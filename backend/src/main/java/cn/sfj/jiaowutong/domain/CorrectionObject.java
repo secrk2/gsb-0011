@@ -66,15 +66,23 @@ public class CorrectionObject {
     private Double lastLat;
     private Double lastLng;
 
-    /** 最近一次定位是否在围栏内 */
+        /** 最近一次定位是否在围栏内 */
     private Boolean lastInsideFence;
+
+    /** 最近一次有效定位点的设备状态：NORMAL/LOW_BATTERY/NO_SIGNAL/POWER_OFF */
+    @Column(name = "last_device_status", length = 16)
+    private String lastDeviceStatus;
+
+    /** 最近一次上报电量（0..100） */
+    @Column(name = "last_battery_percent")
+    private Integer lastBatteryPercent;
 
     private LocalDateTime createdAt;
 
     @PrePersist
     public void prePersist() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = cn.sfj.jiaowutong.common.time.TimeZones.utcNow();
         }
     }
 
@@ -94,6 +102,8 @@ public class CorrectionObject {
     public Double getLastLat() { return lastLat; }
     public Double getLastLng() { return lastLng; }
     public Boolean getLastInsideFence() { return lastInsideFence; }
+    public String getLastDeviceStatus() { return lastDeviceStatus; }
+    public Integer getLastBatteryPercent() { return lastBatteryPercent; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 
     public void setCorrectionNo(String correctionNo) { this.correctionNo = correctionNo; }
@@ -111,4 +121,6 @@ public class CorrectionObject {
     public void setLastLat(Double lastLat) { this.lastLat = lastLat; }
     public void setLastLng(Double lastLng) { this.lastLng = lastLng; }
     public void setLastInsideFence(Boolean lastInsideFence) { this.lastInsideFence = lastInsideFence; }
+    public void setLastDeviceStatus(String lastDeviceStatus) { this.lastDeviceStatus = lastDeviceStatus; }
+    public void setLastBatteryPercent(Integer lastBatteryPercent) { this.lastBatteryPercent = lastBatteryPercent; }
 }

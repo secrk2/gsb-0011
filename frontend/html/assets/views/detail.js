@@ -82,9 +82,11 @@
                   ? '<span class="badge green">已报到</span>'
                   : '<span class="badge gray">未报到</span>'}</dd>
                 <dt>最近定位</dt>
-                <dd>${o.lastLocationAt
-                  ? `${UI.fmtDateTime(o.lastLocationAt)} · ` +
-                    (o.lastInsideFence ? '<span class="badge green">围栏内</span>' : '<span class="badge red">📍越界</span>')
+                <dd>${o.lastPointUtc
+                  ? `${UI.tzText(o.lastPointUtc, o.zoneId)} · ` +
+                    (o.lastInsideFence === false
+                      ? '<span class="badge red">📍越界</span>'
+                      : '<span class="badge green">围栏内</span>')
                   : '暂无'}</dd>
               </dl>
               <div id="audit-slot"></div>
@@ -124,7 +126,7 @@
                       <b>${UI.esc(t.fromStatusLabel)}</b> → <b>${UI.esc(t.toStatusLabel)}</b>
                     </div>
                     <div class="tl-meta">
-                      ${UI.esc(t.operatorName)} · ${UI.fmtDateTime(t.operatedAt)}
+                      ${UI.esc(t.operatorName)} · ${UI.esc(t.operatedAtLocal)}
                       ${t.reason ? '· ' + UI.esc(t.reason) : ''}
                     </div>
                   </div>`).join('') : '<div style="color:var(--ink-muted);font-size:13px">暂无流转记录</div>'}
@@ -139,7 +141,7 @@
                     <span class="red-dot" style="margin-top:6px"></span>
                     <div class="v-body">
                       <div class="v-detail"><span class="badge red" style="margin-right:6px">${UI.esc(v.typeLabel)}</span>${UI.esc(v.detail)}</div>
-                      <div class="v-meta">${UI.fmtDateTime(v.eventTime)}</div>
+                      <div class="v-meta">${UI.esc(v.eventTimeLocal)}</div>
                     </div>
                   </div>`).join('')
                   : '<div style="color:var(--good);font-size:13px">暂无违规记录</div>'}
@@ -203,7 +205,7 @@
                   <span style="margin-top:2px">👁</span>
                   <div class="v-body">
                     <div class="v-detail">${UI.esc(a.viewerName)}：${UI.esc(a.reason)}</div>
-                    <div class="v-meta">${UI.fmtDateTime(a.viewedAt)}</div>
+                    <div class="v-meta">${UI.esc(a.viewedAtLocal)}</div>
                   </div>
                 </div>`).join('')}
             </div>
@@ -248,33 +250,44 @@
     async function loadTracks() {
       const slot = root.querySelector('#tracks-slot');
       try {
-        const tracks = await Api.get('/objects/' + o.id + '/tracks');
-        if (!tracks.length) {
+        const all = await Api.get('/objects/' + o.id + '/tracks');
+        const tracks = all.filter((t) => t.result === 'ACCEPTED');
+        const dropped = all.filter((t) => t.result === 'DRIFT_DROPPED');
+        if (!tracks.length && !dropped.length) {
           slot.innerHTML = '<div style="color:var(--ink-muted);font-size:13px">暂无轨迹点</div>';
+          return;
+        }
+        if (!tracks.length) {
+          slot.innerHTML = `<div style="color:var(--ink-muted);font-size:13px">
+            无有效轨迹点；另有 ${dropped.length} 个 GPS 漂移丢弃点（不入轨迹、不判越界）。</div>`;
           return;
         }
         const shown = tracks.slice(-12).reverse();
         slot.innerHTML = `
           <div class="table-wrap">
             <table class="data">
-              <thead><tr><th>采集时间</th><th>坐标</th><th>来源</th><th>围栏</th></tr></thead>
+              <thead><tr><th>采集时间（司法所当地）</th><th>坐标</th><th>来源</th><th>设备</th><th>围栏</th></tr></thead>
               <tbody>
                 ${shown.map((t) => `
                   <tr>
-                    <td data-label="采集时间" style="white-space:nowrap">${UI.fmtDateTime(t.pointTime)}</td>
+                    <td data-label="采集时间" style="white-space:nowrap">${UI.esc(t.localTime)}</td>
                     <td data-label="坐标" style="font-variant-numeric:tabular-nums;font-size:12.5px">
                       ${t.lat.toFixed(5)}, ${t.lng.toFixed(5)}</td>
                     <td data-label="来源">${t.offlineCaptured
-                      ? '<span class="badge" style="color:var(--warning);background:var(--warning-bg)">离线补传</span>'
+                      ? '<span class="badge amber">离线补传</span>'
                       : '<span class="badge green">实时</span>'}</td>
-                    <td data-label="围栏">${t.outsideFence
+                    <td data-label="设备">${UI.deviceIcon(t.deviceStatus)} ${UI.deviceLabel(t.deviceStatus)}</td>
+                    <td data-label="围栏">${t.outsideFence === true
                       ? '<span class="badge red">越界</span>'
                       : '<span class="badge green">内</span>'}</td>
                   </tr>`).join('')}
               </tbody>
             </table>
           </div>
-          ${tracks.length > 12 ? `<div style="font-size:12px;color:var(--ink-muted);margin-top:6px">仅显示最近 12 个点</div>` : ''}`;
+          <div style="font-size:12px;color:var(--ink-muted);margin-top:6px">
+            ${tracks.length > 12 ? `仅显示最近 12 个点，共 ${tracks.length} 个有效点；` : ''}
+            ${dropped.length ? `另有 ${dropped.length} 个 GPS 漂移丢弃点（已留底，不入轨迹）。` : ''}
+          </div>`;
       } catch (e) {
         slot.innerHTML = `<div style="color:var(--critical);font-size:13px">轨迹加载失败：${UI.esc(e.message)}</div>`;
       }

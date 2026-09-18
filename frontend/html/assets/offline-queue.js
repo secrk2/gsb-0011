@@ -21,11 +21,15 @@
       + '-' + Math.random().toString(36).slice(2, 6);
   }
 
-  /** 转无时区 ISO（匹配后端 LocalDateTime），用浏览器本地时钟分量 */
-  function localIso(d) {
+  /** 转带时区偏移的 ISO-8601（匹配后端 OffsetDateTime），服务端据此换算 UTC 存储 */
+  function offsetIso(d) {
     const p = (n) => String(n).padStart(2, '0');
+    let offMin = -d.getTimezoneOffset(); // 东八区为 +480
+    const sign = offMin >= 0 ? '+' : '-';
+    offMin = Math.abs(offMin);
+    const off = sign + p(Math.floor(offMin / 60)) + ':' + p(offMin % 60);
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
-      + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+      + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + off;
   }
 
   const TrackQueue = {
@@ -95,15 +99,20 @@
       save(LOG_KEY, this.logs);
     },
 
-    /** 采集一个定位点；offlineCaptured 按“采集瞬间是否在线”如实标记 */
-    capture(lat, lng, fixAgeSeconds) {
+    /**
+     * 采集一个定位点；offlineCaptured 按“采集瞬间是否在线”如实标记。
+     * deviceStatus/batteryPercent 随腕表回传（NORMAL/LOW_BATTERY/NO_SIGNAL/POWER_OFF）。
+     */
+    capture(lat, lng, fixAgeSeconds, deviceStatus, batteryPercent) {
       const now = new Date();
       const point = {
         clientPointId: uuid(),
-        pointTime: localIso(now),
+        pointTime: offsetIso(now),
         lat: Number(lat.toFixed(6)),
         lng: Number(lng.toFixed(6)),
         offlineCaptured: !this.effectiveOnline,
+        deviceStatus: deviceStatus || 'NORMAL',
+        batteryPercent: batteryPercent == null ? null : batteryPercent,
       };
       this.queue.push(point);
       save(QUEUE_KEY, this.queue);
@@ -134,6 +143,9 @@
 
         if (result.duplicates > 0) {
           this.log('DUP', `合并补传完成：${result.duplicates} 个重复点被幂等去重，未产生重复轨迹`);
+        }
+        if (result.driftDropped > 0) {
+          this.log('DRIFT', `GPS 漂移丢弃 ${result.driftDropped} 个跳点（两点跳变超合理速度，留底但不入轨迹、不报警）`);
         }
         if (result.rejected > 0) {
           (result.rejectedPoints || []).forEach((r) =>
@@ -168,5 +180,6 @@
   };
 
   global.TrackQueue = TrackQueue;
-  global.localIso = localIso;
+  global.offsetIso = offsetIso;
+  global.localIso = offsetIso; // 兼容旧引用：现在返回带时区偏移的 ISO 绝对时刻
 })(window);

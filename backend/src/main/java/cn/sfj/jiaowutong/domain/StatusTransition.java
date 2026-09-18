@@ -49,7 +49,7 @@ public class StatusTransition {
         this.operatorId = operatorId;
         this.operatorName = operatorName;
         this.reason = reason;
-        this.operatedAt = LocalDateTime.now();
+        this.operatedAt = cn.sfj.jiaowutong.common.time.TimeZones.utcNow();
     }
 
     public Long getId() { return id; }
